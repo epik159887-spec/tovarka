@@ -9,6 +9,7 @@ import {
   ContactSection,
   Footer,
 } from './sections/StorySections';
+import { PageErrorBoundary } from './components/PageErrorBoundary';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutForm } from './components/CheckoutForm';
 const AdminPage = lazy(() => import('./admin/AdminPage'));
@@ -79,15 +80,17 @@ function Storefront() {
 export function App() {
   return window.location.pathname === '/admin' ||
     window.location.pathname === '/admin/' ? (
-    <Suspense
-      fallback={
-        <div className="state" role="status">
-          Завантажуємо панель…
-        </div>
-      }
-    >
-      <AdminPage />
-    </Suspense>
+    <PageErrorBoundary>
+      <Suspense
+        fallback={
+          <div className="state" role="status">
+            Завантажуємо панель…
+          </div>
+        }
+      >
+        <AdminPage />
+      </Suspense>
+    </PageErrorBoundary>
   ) : (
     <Storefront />
   );

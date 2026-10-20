@@ -22,7 +22,7 @@ npm run db:seed
 npm run dev
 ```
 
-In a sandbox without a writable default npm cache, use `npm ci --cache /workspace/.npm-cache`. The root `prepare` script builds the shared package. The backend `predev` hook generates Prisma Client before each development-server start, including `npm run dev` and `npm run dev:backend`. This restores the client after `npm ci` replaces `node_modules`; if a standalone build, seed, or administrator command reports an uninitialized client, run `npm run db:generate` first. Generation loads the root `.env` without exposing anything to Vite.
+In a sandbox without a writable default npm cache, use `npm ci --cache /workspace/.npm-cache`. The root `prepare` script builds the shared package. The root `predev` hook rebuilds `@tovarka/shared` before `npm run dev`, so pulling new shared exports or schemas cannot leave the admin page loading stale `dist` files. For standalone `dev:frontend`/`dev:backend` or direct workspace starts, run `npm run build -w @tovarka/shared` first. The backend `predev` hook generates Prisma Client before each development-server start, including `npm run dev` and `npm run dev:backend`. This restores the client after `npm ci` replaces `node_modules`; if a standalone build, seed, or administrator command reports an uninitialized client, run `npm run db:generate` first. Generation loads the root `.env` without exposing anything to Vite.
 
 The frontend listens on port 5173 and proxies `/api` to the backend on port 3000. Run them separately with `npm run dev:frontend` and `npm run dev:backend`. The health endpoint checks an actual database query. Confirm startup with:
 

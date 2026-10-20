@@ -11,6 +11,7 @@
     "node": ">=22.12"
   },
   "scripts": {
+    "predev": "npm run build -w @tovarka/shared",
     "dev": "concurrently -k \"npm:dev:backend\" \"npm:dev:frontend\"",
     "dev:backend": "npm run dev -w @tovarka/backend",
     "dev:frontend": "npm run dev -w @tovarka/frontend",
