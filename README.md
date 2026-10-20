@@ -49,7 +49,18 @@ All configuration lives in the **root `.env`**, or injected backend process vari
 | `TEST_DATABASE_URL`  | Separate integration-test database; must end in `_test` | No default                                                           |
 | `CHROMIUM_PATH`      | Optional browser-test executable                        | System Chromium when available                                       |
 
+`POSTGRES_PORT` controls the PostgreSQL port exposed on the host (default `5432`); PostgreSQL inside the container continues to use port `5432`. Keep the port in `DATABASE_URL` consistent with `POSTGRES_PORT`.
+
 The Compose credentials are development-only. For a custom password, set both `POSTGRES_PASSWORD` and the corresponding password in `DATABASE_URL` before the first database initialization. Changing the environment does not change a password in an existing PostgreSQL volume. For an existing database, skip the Docker step and configure `DATABASE_URL`; apply migrations and seed only to the database you intend to use.
+
+If Docker on Windows cannot bind port 5432, select a different available port by editing these two entries in the existing root `.env` (do not overwrite the rest of the file):
+
+```env
+POSTGRES_PORT=5433
+DATABASE_URL=postgresql://tovarka:local-development-only@127.0.0.1:5433/tovarka
+```
+
+Then run `docker compose up -d --wait postgres`, `npm run db:migrate`, and `npm run db:seed`. Use your existing password if you previously configured one. The named database volume is preserved when Compose recreates the container for a port change. If port 5433 is also unavailable, choose another available port and update both entries consistently. Update test connection URLs to use the selected port as well.
 
 ## Database and migrations
 
