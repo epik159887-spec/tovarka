@@ -14,7 +14,15 @@ test('catalog filters, stock limits, persistent cart and successful checkout', a
       .getByRole('button'),
   ).toBeDisabled();
   await page.getByRole('button', { name: 'Кераміка', exact: false }).click();
-  await expect(page.locator('.product-card')).toHaveCount(3);
+  const ceramics = await (
+    await page.request.get('/api/products?category=ceramics&limit=6')
+  ).json();
+  await expect(page.locator('.product-card')).toHaveCount(
+    ceramics.data.products.length,
+  );
+  await expect(page.locator('.product-category')).toHaveText(
+    ceramics.data.products.map(() => 'Кераміка'),
+  );
   await page.getByLabel('Пошук товарів').fill('Горнятко');
   await expect(page.locator('.product-card')).toHaveCount(1);
   await page

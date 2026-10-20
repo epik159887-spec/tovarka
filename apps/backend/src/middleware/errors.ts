@@ -1,5 +1,6 @@
 import type { ErrorRequestHandler } from 'express';
 import { ZodError } from '@tovarka/shared';
+import { MulterError } from 'multer';
 import { AppError } from '../utils/errors.js';
 export const errorHandler: ErrorRequestHandler = (
   error: unknown,
@@ -7,6 +8,17 @@ export const errorHandler: ErrorRequestHandler = (
   res,
   _next,
 ) => {
+  if (error instanceof MulterError) {
+    res
+      .status(error.code === 'LIMIT_FILE_SIZE' ? 413 : 400)
+      .json({
+        error: {
+          code: 'UPLOAD_ERROR',
+          message: 'Оберіть одне фото PNG, JPEG або WebP до 5 МБ',
+        },
+      });
+    return;
+  }
   if (error instanceof ZodError) {
     res.status(400).json({
       error: {

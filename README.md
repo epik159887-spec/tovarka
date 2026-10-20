@@ -90,7 +90,44 @@ npm run db:generate
 
 Migration failures report a safe `stage`, `code`, and troubleshooting hint instead of the raw database error. `28P01` means the database rejected the password; `ECONNREFUSED` means no database is accepting the connection; `3D000` means the selected database does not exist. Check `docker compose ps` and verify your local root `.env` against the credentials used to initialize PostgreSQL. On Windows, a separately installed PostgreSQL service may already use port 5432. Do not share `.env` or a connection URL when requesting help; share only the diagnostic code and stage. Existing Docker volumes keep their original database password when `.env` changes.
 
-Keep product changes in the seed script or authorized database operations. There is intentionally no public catalog-write endpoint or administration dashboard.
+Keep product changes in the seed script or authorized database operations. Catalog writes are available only through the authenticated administration API described below. There is no unauthenticated product-write endpoint.
+
+## Administration panel
+
+The Ukrainian admin UI is at **`/admin`** on the same frontend host as the store. It provides total order count, orders in the last 24 hours, the sum of placed orders (not paid revenue), total products, searchable/paginated orders with customer contacts and historical item snapshots, category creation, and product creation with stock, visibility, price, description, and photo upload. Hidden products are excluded from the public catalog. The current scope does not include editing/deleting products or changing order statuses.
+
+After pulling an update, stop the running development server, preserve your existing `.env` (including the PostgreSQL port you selected), and run each command separately from the repository root:
+
+```bash
+npm ci
+npm run db:generate
+npm run db:migrate
+npm run admin:create
+npm run dev
+```
+
+PostgreSQL must be running before migration and account creation. `admin:create` is an interactive backend-only command. Enter a username (press Enter to use `admin`), then a password of 12–128 characters twice. Password input is masked and is never written to source, `.env`, or console output. If Git Bash does not expose an interactive terminal, run the command in PowerShell or Windows Terminal from the same repository. There is no built-in password or public registration/setup endpoint. Re-running the command with an existing username resets that account's password and revokes all its sessions without deleting orders or products.
+
+Open `/admin` on the store's frontend, using the exact origin configured in `FRONTEND_URL`; the default is the frontend on `localhost` port `5173`. Signing in through a different hostname such as `127.0.0.1` requires updating `FRONTEND_URL` and restarting the backend. Keep your working `DATABASE_URL` unchanged when adding an administrator. Account data is stored in the same PostgreSQL database as orders.
+
+Passwords use salted scrypt hashes. Sessions use random 256-bit tokens in HttpOnly, SameSite=Strict cookies; only token digests are stored in PostgreSQL. Sessions expire after eight hours and are revoked on logout/password reset. Production cookies are Secure and require HTTPS. Login attempts are rate limited. Every admin mutation requires the configured browser Origin plus a custom request header, and every customer-data endpoint requires a valid server session. Private responses use `Cache-Control: no-store`; the browser clears private query data on logout/expiry. The UI does not store passwords or session tokens in localStorage.
+
+Product photo uploads accept a single PNG, JPEG, or WebP up to 5 MiB, check the file signature, generate a random filename, and exclude SVG/HTML uploads. Uploaded photos are public product assets under `/uploads`; only administrators may upload them. Use photographs intended to be public. The default filesystem directory is `.data/uploads` relative to the backend process working directory (normally `apps/backend/.data/uploads`). It is ignored by Git. Set `UPLOAD_DIR` to an absolute persistent directory for production and back it up along with the database. File uploads are separate from database transactions: a photo uploaded before a discarded form can remain unused on disk. Existing catalog images and HTTPS image URLs remain supported, including in persisted carts.
+
+Admin API routes (all under `/api/admin`):
+
+| Method | Path          | Purpose                                                       |
+| ------ | ------------- | ------------------------------------------------------------- |
+| POST   | `/login`      | Validate credentials and set the session cookie               |
+| GET    | `/session`    | Current administrator identity                                |
+| POST   | `/logout`     | Revoke the current session                                    |
+| GET    | `/stats`      | Store order/product counts and order amount                   |
+| GET    | `/orders`     | Paginated orders; `search` matches number, customer, or phone |
+| POST   | `/products`   | Create a validated catalog product                            |
+| POST   | `/categories` | Create a product category                                     |
+| POST   | `/uploads`    | Upload a product photo as multipart field `image`             |
+
+The optional admin browser scenario requires a disposable seeded database, a dedicated admin account, a test order, and process variables `ADMIN_TEST_USERNAME`, `ADMIN_TEST_PASSWORD`, `ADMIN_TEST_CUSTOMER`, and `ADMIN_TEST_PRODUCT`. Never provide production credentials to browser tests. Run `npm run test:browser -- tests/browser/admin.spec.ts` with those variables injected securely. Without the two credential variables, this optional scenario is explicitly skipped; the three storefront scenarios still run normally. The scenario places a product in the database and uploads a photo, so use disposable fixtures and clean them up after testing.
 
 ## Telegram configuration
 
@@ -171,7 +208,7 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-Validation during implementation: 27 unit tests, 12 PostgreSQL integration tests, and 3 Chromium browser scenarios passed. Type checking, linting, and the production build passed. No real Telegram message was sent; actual delivery requires the two Telegram variables and permitted network access.
+Validation after adding the administration panel: 39 unit tests, 22 PostgreSQL integration tests, and 4 Chromium browser scenarios passed (including the separately configured admin scenario). Type checking, linting, and the production build passed. No real Telegram message was sent; actual delivery requires the two Telegram variables and permitted network access.
 
 ## Production build and deployment
 
@@ -183,7 +220,7 @@ npm run db:migrate
 NODE_ENV=production npm run start -w @tovarka/backend
 ```
 
-Serve `apps/frontend/dist` with a static web server and proxy `/api` to the private backend. Use HTTPS, a durable PostgreSQL database, process supervision, restricted database access, and backups. Set `FRONTEND_URL` to the actual site origin and inject the backend environment variables. Frontend and backend are separate build artifacts; the Express server does not serve the frontend. Seed only if you explicitly want demonstration products. Replace the seed catalog, product illustrations, and merchant contact/policy details before running a real store. There is no admin UI or online payment integration.
+Serve `apps/frontend/dist` with a static web server, use an SPA fallback to `index.html` for `/admin`, and proxy `/api` and `/uploads` to the private backend. Use HTTPS, a durable PostgreSQL database, process supervision, restricted database access, and backups. Set `FRONTEND_URL` to the actual site origin and inject the backend environment variables. Frontend and backend are separate build artifacts; the Express server does not serve the frontend. Seed only if you explicitly want demonstration products. Replace the seed catalog, product illustrations, and merchant contact/policy details before running a real store. Online payment integration is not implemented.
 
 ## Project map
 
@@ -191,6 +228,7 @@ Serve `apps/frontend/dist` with a static web server and proxy `/api` to the priv
 apps/frontend/
   public/images/         Original local SVG product illustrations
   src/components/        Header, cards, accessible dialog, cart, checkout, UI states
+  src/admin/             Login, dashboard, order details, product/category/photo forms
   src/sections/          Hero, catalog, benefits, ordering steps, contact, footer
   src/hooks/             Dedicated persistent cart provider
   src/services/          Typed API client and endpoint methods
@@ -201,8 +239,8 @@ apps/backend/
   src/config/            Validated environment and Prisma connection
   src/controllers/       Request parsing and response mapping
   src/routes/            REST routes and order rate limiter
-  src/services/          Catalog, transaction orchestration, Telegram, outbox worker
-  src/repositories/      Product/order/outbox database operations
+  src/services/          Catalog, orders, admin authentication, uploads, Telegram/outbox
+  src/repositories/      Product/order/admin/outbox database operations
   src/middleware/        Central error handling
   src/utils/             App errors and transactional migration runner
 packages/shared/         Strict shared schemas, types, delivery labels, money helpers

@@ -12,6 +12,7 @@ const schema = z.object({
   DATABASE_URL: z.string().min(1),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   FRONTEND_URL: z.string().url().default('http://localhost:5173'),
+  UPLOAD_DIR: z.string().min(1).optional(),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_CHAT_ID: z.string().optional(),
 });

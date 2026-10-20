@@ -71,3 +71,21 @@ model Notification {
   sentAt        DateTime?
   @@index([status, nextAttemptAt])
 }
+
+model AdminUser {
+  id           String         @id @default(uuid()) @db.Uuid
+  username     String         @unique
+  passwordHash String
+  createdAt    DateTime       @default(now())
+  sessions     AdminSession[]
+}
+model AdminSession {
+  id        String    @id @default(uuid()) @db.Uuid
+  tokenHash String    @unique
+  adminId   String    @db.Uuid
+  admin     AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  @@index([expiresAt])
+  @@index([adminId])
+}

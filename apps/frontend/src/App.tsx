@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { Check, X } from 'lucide-react';
 import { Header } from './components/Header';
 import { HeroSection } from './sections/HeroSection';
@@ -11,7 +11,8 @@ import {
 } from './sections/StorySections';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutForm } from './components/CheckoutForm';
-export function App() {
+const AdminPage = lazy(() => import('./admin/AdminPage'));
+function Storefront() {
   const [panel, setPanel] = useState<'cart' | 'checkout' | null>(null);
   const [notice, setNotice] = useState('');
   useEffect(() => {
@@ -72,5 +73,22 @@ export function App() {
         )}
       </div>
     </>
+  );
+}
+
+export function App() {
+  return window.location.pathname === '/admin' ||
+    window.location.pathname === '/admin/' ? (
+    <Suspense
+      fallback={
+        <div className="state" role="status">
+          Завантажуємо панель…
+        </div>
+      }
+    >
+      <AdminPage />
+    </Suspense>
+  ) : (
+    <Storefront />
   );
 }

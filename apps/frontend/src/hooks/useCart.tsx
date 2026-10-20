@@ -10,6 +10,7 @@ import {
 import { z } from 'zod';
 import {
   calculateCartTotal,
+  productImageSchema,
   type CartEntry,
   type Product,
 } from '@tovarka/shared';
@@ -20,7 +21,7 @@ const entrySchema = z.object({
     slug: z.string(),
     description: z.string(),
     price: z.string().regex(/^\d+(\.\d{1,2})?$/),
-    imageUrl: z.string().regex(/^\/images\/[a-z-]+\.svg$/),
+    imageUrl: productImageSchema,
     stock: z.number().int().min(0),
     category: z.object({
       id: z.string(),

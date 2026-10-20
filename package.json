@@ -24,7 +24,8 @@
     "db:migrate": "npm run db:migrate -w @tovarka/backend",
     "db:seed": "npm run db:seed -w @tovarka/backend",
     "prepare": "npm run build -w @tovarka/shared",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "admin:create": "npm run admin:create -w @tovarka/backend"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",
