@@ -10,8 +10,9 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
-    "@tovarka/shared": "*",
+    "@noble/hashes": "^2.4.0",
     "@tanstack/react-query": "^5.90.0",
+    "@tovarka/shared": "*",
     "lucide-react": "^0.468.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

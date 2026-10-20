@@ -135,7 +135,7 @@ The optional admin browser scenario requires a disposable seeded database, a ded
 2. Start a private conversation with the bot and send a message, or add the bot to the destination group and allow it to send messages. Channel notifications require suitable administrator permission.
 3. Use the official Bot API's `getUpdates` method from a private backend tool to inspect `message.chat.id` (or `channel_post.chat.id`) after sending a message. If a webhook is configured, polling `getUpdates` cannot be used concurrently; inspect the webhook update in your backend instead. Do not put a token-bearing URL in screenshots, shell history, or shared logs. Group IDs may be negative; preserve the full value as a string.
 4. Save that ID as `TELEGRAM_CHAT_ID`, allow backend HTTPS access to `api.telegram.org`, and restart the backend. Both variables must be present.
-5. Place a development order with your own contact details. Check the Notification row in the private database for delivery status. Automated tests always mock Telegram.
+5. Place a development order with your own contact details. Check the Notification row in the private database for delivery status. Unit and integration tests mock Telegram. For browser tests, explicitly set both Telegram variables to empty values in the disposable backend process.
 
 Order creation commits before notification processing. The outbox is created in the same transaction as the order. With missing credentials, messages stay `PENDING` and are picked up when a configured server starts. A background worker atomically claims work, escapes customer text, splits long messages safely, and records progress after each part. Multiple workers cannot claim the same pending part simultaneously.
 
@@ -173,7 +173,7 @@ Orders require a UUID `Idempotency-Key` header and the following payload:
 }
 ```
 
-Delivery methods are `post`, `courier`, and `pickup`; the first two require an address. At most 50 distinct products and 99 units per line are accepted. Duplicate product lines and client-supplied prices are rejected. An identical payload with the same key returns the original order with 200; a new order returns 201; a changed payload with an existing key returns 409. Persist the same key when retrying a network failure. The frontend stores a request digest and key, never checkout contact details, in localStorage. Cart product data is also persisted there. If browser storage is disabled, persistence across reloads is unavailable.
+Delivery methods are `post`, `courier`, and `pickup`; the first two require an address. At most 50 distinct products and 99 units per line are accepted. Duplicate product lines and client-supplied prices are rejected. An identical payload with the same key returns the original order with 200; a new order returns 201; a changed payload with an existing key returns 409. Persist the same key when retrying a network failure. The frontend stores a request digest and key, never checkout contact details, in localStorage. SHA-256 is calculated with a pure JavaScript implementation, and UUIDs use `crypto.getRandomValues` when `crypto.randomUUID` is unavailable. Checkout therefore works on development HTTP origins without SubtleCrypto; saved SHA-256 digests remain compatible across upgrades and reloads. Cart product data is also persisted there. If browser storage is disabled, persistence across reloads is unavailable.
 
 Orders run at serializable isolation with bounded conflict retries. Stock updates are conditional and locked in a consistent order; insufficient stock rolls back all prior line updates. The unique database key and request hash prevent duplicate orders and duplicate outbox jobs. Price changes are authoritative on the server; the receipt shows the saved total. The cart offers an explicit price/stock refresh.
 
@@ -197,9 +197,11 @@ DATABASE_URL=postgresql://tovarka:local-development-only@localhost:5432/tovarka_
 TEST_DATABASE_URL=postgresql://tovarka:local-development-only@localhost:5432/tovarka_test npm run test:integration
 ```
 
+The HTTP checkout browser regression serves an insecure HTTP origin through a local request bridge, verifies that SubtleCrypto and native UUID APIs are absent, drops the first response after the order commits, reloads the page, and checks that retry returns the same order.
+
 These tests exercise real PostgreSQL transactions, catalog validation, authoritative prices, invalid requests, stock rollback, concurrent overselling, concurrent duplicate requests, rate limiting, and successful/failed/multipart Telegram delivery with mocked HTTP requests.
 
-Browser tests require the running frontend/backend and seeded development products. They create a test order and reduce stock; run against a disposable development database. They cover filters, unavailable products, quantity controls, cart persistence, form validation, checkout success, responsive layout, local images, and keyboard dialog dismissal.
+Browser tests require the running frontend/backend and seeded development products. Use an isolated backend with `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` explicitly set to empty values, so real notifications are not sent. They create a test order and reduce stock; run against a disposable development database. They cover filters, unavailable products, quantity controls, cart persistence, form validation, checkout success, responsive layout, local images, and keyboard dialog dismissal.
 
 ```bash
 # If system Chromium is unavailable:
