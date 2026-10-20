@@ -29,7 +29,23 @@ export async function createAdminProduct(input: CreateProductInput) {
       'CATEGORY_NOT_FOUND',
       'Категорію не знайдено. Оновіть сторінку.',
     );
-  return adminRepository.createProduct(input, `product-${randomUUID()}`);
+  try {
+    return await adminRepository.createProduct(
+      input,
+      `product-${randomUUID()}`,
+    );
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2003'
+    )
+      throw new AppError(
+        400,
+        'CATEGORY_NOT_FOUND',
+        'Категорію вже видалено. Оберіть іншу категорію.',
+      );
+    throw error;
+  }
 }
 
 export async function setAdminPassword(username: string, password: string) {
@@ -60,4 +76,31 @@ export async function deleteAdminOrder(id: string) {
     }
   }
   throw new Error('Unreachable deletion retry state');
+}
+
+export async function deleteAdminCatalogItem(
+  kind: 'product' | 'category',
+  id: string,
+) {
+  try {
+    return await (kind === 'product'
+      ? adminRepository.deleteProduct(id)
+      : adminRepository.deleteCategory(id));
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2025')
+        throw new AppError(
+          404,
+          'CATALOG_ITEM_NOT_FOUND',
+          'Запис уже видалено або не знайдено.',
+        );
+      if (error.code === 'P2003' && kind === 'category')
+        throw new AppError(
+          409,
+          'CATEGORY_NOT_EMPTY',
+          'Спочатку видаліть товари цієї категорії, зокрема приховані.',
+        );
+    }
+    throw error;
+  }
 }

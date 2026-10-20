@@ -11,7 +11,7 @@ test('catalog filters, stock limits, persistent cart and successful checkout', a
     page
       .locator('.product-card')
       .filter({ hasText: 'Плед' })
-      .getByRole('button'),
+      .getByRole('button', { name: 'Додати', exact: false }),
   ).toBeDisabled();
   await page.getByRole('button', { name: 'Кераміка', exact: false }).click();
   const ceramics = await (

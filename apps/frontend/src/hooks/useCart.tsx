@@ -22,6 +22,7 @@ const entrySchema = z.object({
     description: z.string(),
     price: z.string().regex(/^\d+(\.\d{1,2})?$/),
     imageUrl: productImageSchema,
+    imageUrls: z.array(productImageSchema).max(10).optional(),
     stock: z.number().int().min(0),
     category: z.object({
       id: z.string(),

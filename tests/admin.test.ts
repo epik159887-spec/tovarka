@@ -50,3 +50,54 @@ describe('admin password storage', () => {
     expect(await verifyPassword('incorrect', 'malformed')).toBe(false);
   });
 });
+
+describe('product gallery validation', () => {
+  it('supports old single-image requests and puts the cover first without duplicates', () => {
+    expect(createProductSchema.parse(input).imageUrls).toEqual([
+      input.imageUrl,
+    ]);
+    expect(
+      createProductSchema.parse({
+        ...input,
+        imageUrls: ['/images/vase.svg', input.imageUrl],
+      }).imageUrls,
+    ).toEqual([input.imageUrl, '/images/vase.svg']);
+  });
+  it('accepts ten images including the cover and rejects oversized galleries', () => {
+    const photos = Array.from(
+      { length: 10 },
+      (_, i) => `https://example.com/${i}.jpg`,
+    );
+    expect(
+      createProductSchema.safeParse({
+        ...input,
+        imageUrl: photos[0],
+        imageUrls: photos,
+      }).success,
+    ).toBe(true);
+    expect(
+      createProductSchema.safeParse({ ...input, imageUrls: photos }).success,
+    ).toBe(false);
+    expect(
+      createProductSchema.safeParse({
+        ...input,
+        imageUrl: photos[0],
+        imageUrls: [...photos, 'https://example.com/11.jpg'],
+      }).success,
+    ).toBe(false);
+  });
+  it('validates every additional image', () => {
+    expect(
+      createProductSchema.safeParse({
+        ...input,
+        imageUrls: ['javascript:alert(1)'],
+      }).success,
+    ).toBe(false);
+    expect(
+      createProductSchema.safeParse({
+        ...input,
+        imageUrls: ['/uploads/../../.env'],
+      }).success,
+    ).toBe(false);
+  });
+});

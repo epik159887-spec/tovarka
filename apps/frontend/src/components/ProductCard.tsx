@@ -1,4 +1,6 @@
-import { Check, Plus } from 'lucide-react';
+import { useState } from 'react';
+import { ProductGallery } from './ProductGallery';
+import { Check, Plus, Images } from 'lucide-react';
 import type { Product } from '@tovarka/shared';
 import { useCart } from '../hooks/useCart';
 import { formatCurrency } from '../utils/format';
@@ -10,6 +12,9 @@ export function ProductCard({
   onAdded: (name: string) => void;
 }) {
   const { add, items } = useCart();
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const photoCount = new Set([product.imageUrl, ...(product.imageUrls ?? [])])
+    .size;
   const quantity =
     items.find((i) => i.product.id === product.id)?.quantity ?? 0;
   const disabled =
@@ -19,13 +24,23 @@ export function ProductCard({
   return (
     <article className="product-card">
       <div className={`product-image image-${product.category.slug}`}>
-        <img
-          src={product.imageUrl}
-          alt={product.name}
-          loading="lazy"
-          width="600"
-          height="600"
-        />
+        <button
+          className="product-gallery-open"
+          aria-label={`Переглянути фото ${product.name}`}
+          onClick={() => setGalleryOpen(true)}
+        >
+          <img
+            src={product.imageUrl}
+            alt={product.name}
+            loading="lazy"
+            width="600"
+            height="600"
+          />
+          <span className="product-photo-count">
+            <Images size={14} />{' '}
+            {photoCount > 1 ? `${photoCount} фото` : 'Переглянути'}
+          </span>
+        </button>
         {product.stock === 0 ? (
           <span className="product-badge">Очікуємо на поповнення</span>
         ) : (
@@ -59,6 +74,12 @@ export function ProductCard({
           </button>
         </div>
       </div>
+      {galleryOpen && (
+        <ProductGallery
+          product={product}
+          onClose={() => setGalleryOpen(false)}
+        />
+      )}
     </article>
   );
 }

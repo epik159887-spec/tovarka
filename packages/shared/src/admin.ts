@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Product } from './index.js';
+export const maxProductImages = 10;
 export const productImageSchema = z
   .string()
   .trim()
@@ -59,9 +60,25 @@ export const createProductSchema = z
       .max(1000000, 'Кількість надто велика'),
     categoryId: z.string().uuid('Оберіть категорію'),
     imageUrl: productImageSchema,
+    imageUrls: z
+      .array(productImageSchema)
+      .max(maxProductImages, `Дозволено до ${maxProductImages} фото`)
+      .default([]),
     active: z.boolean().default(true),
   })
-  .strict();
+  .strict()
+  .transform((input, ctx) => {
+    const imageUrls = [...new Set([input.imageUrl, ...input.imageUrls])];
+    if (imageUrls.length > maxProductImages) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['imageUrls'],
+        message: `Дозволено до ${maxProductImages} фото разом із головним`,
+      });
+      return z.NEVER;
+    }
+    return { ...input, imageUrls };
+  });
 export const createCategorySchema = z
   .object({
     name: z
@@ -121,4 +138,18 @@ export interface AdminOrderPage {
   total: number;
   page: number;
   pages: number;
+}
+
+export interface AdminProductPage {
+  products: AdminProduct[];
+  total: number;
+  page: number;
+  pages: number;
+}
+export interface AdminCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  productCount: number;
 }

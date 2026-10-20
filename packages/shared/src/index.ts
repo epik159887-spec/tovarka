@@ -115,6 +115,7 @@ export interface Product {
   description: string;
   price: string;
   imageUrl: string;
+  imageUrls?: string[];
   stock: number;
   category: Category;
 }

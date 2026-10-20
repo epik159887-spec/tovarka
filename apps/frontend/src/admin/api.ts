@@ -4,6 +4,8 @@ import type {
   AdminStats,
   AdminOrderPage,
   AdminProduct,
+  AdminProductPage,
+  AdminCategory,
   CreateProductInput,
   Category,
 } from '@tovarka/shared';
@@ -49,6 +51,16 @@ export const adminApi = {
       method: 'DELETE',
       headers: { 'X-Admin-Request': '1' },
     }),
+  products: (page: number, search: string) =>
+    adminRequest<AdminProductPage>(
+      `/products?${new URLSearchParams({ page: String(page), search, limit: '10' })}`,
+    ),
+  categories: () => adminRequest<AdminCategory[]>('/categories'),
+  deleteCatalogItem: (kind: 'product' | 'category', id: string) =>
+    adminRequest<{ id: string }>(
+      `/${kind === 'product' ? 'products' : 'categories'}/${encodeURIComponent(id)}`,
+      { method: 'DELETE', headers: { 'X-Admin-Request': '1' } },
+    ),
   createProduct: (input: CreateProductInput) =>
     post<AdminProduct>('/products', input),
   createCategory: (name: string) => post<Category>('/categories', { name }),

@@ -135,6 +135,44 @@ export const adminRepository = {
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
   },
+  async products(query: AdminOrderQuery) {
+    const where: Prisma.ProductWhereInput = query.search
+      ? { name: { contains: query.search, mode: 'insensitive' } }
+      : {};
+    const [products, total] = await prisma.$transaction(
+      [
+        prisma.product.findMany({
+          where,
+          include: { category: true },
+          orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+          take: query.limit,
+          skip: (query.page - 1) * query.limit,
+        }),
+        prisma.product.count({ where }),
+      ],
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
+    return {
+      products,
+      total,
+      page: query.page,
+      pages: Math.ceil(total / query.limit),
+    };
+  },
+  async categories() {
+    const categories = await prisma.category.findMany({
+      orderBy: { name: 'asc' },
+      include: { _count: { select: { products: true } } },
+    });
+    return categories.map(({ _count, ...category }) => ({
+      ...category,
+      productCount: _count.products,
+    }));
+  },
+  deleteProduct: (id: string) =>
+    prisma.product.delete({ where: { id }, select: { id: true } }),
+  deleteCategory: (id: string) =>
+    prisma.category.delete({ where: { id }, select: { id: true } }),
   category: (id: string) => prisma.category.findUnique({ where: { id } }),
   createProduct: (input: CreateProductInput, slug: string) =>
     prisma.product.create({

@@ -11,6 +11,7 @@ import {
   loginAdmin,
   createAdminProduct,
   deleteAdminOrder,
+  deleteAdminCatalogItem,
 } from '../services/admin.service.js';
 import { adminRepository } from '../repositories/admin.repository.js';
 import {
@@ -53,6 +54,32 @@ export const adminController = {
   async deleteOrder(req: Request, res: Response) {
     res.json({
       data: await deleteAdminOrder(z.string().uuid().parse(req.params.id)),
+    });
+  },
+  async products(req: Request, res: Response) {
+    res.json({
+      data: await adminRepository.products(
+        adminOrderQuerySchema.parse(req.query),
+      ),
+    });
+  },
+  async categories(_req: Request, res: Response) {
+    res.json({ data: await adminRepository.categories() });
+  },
+  async deleteProduct(req: Request, res: Response) {
+    res.json({
+      data: await deleteAdminCatalogItem(
+        'product',
+        z.string().uuid().parse(req.params.id),
+      ),
+    });
+  },
+  async deleteCategory(req: Request, res: Response) {
+    res.json({
+      data: await deleteAdminCatalogItem(
+        'category',
+        z.string().uuid().parse(req.params.id),
+      ),
     });
   },
   async createProduct(req: Request, res: Response) {

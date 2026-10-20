@@ -412,3 +412,159 @@ describe('manual order deletion', () => {
     ).toBe(6);
   });
 });
+
+describe('catalog gallery and deletion', () => {
+  const remove = (
+    agent: ReturnType<typeof request.agent>,
+    kind: string,
+    id: string,
+  ) =>
+    agent
+      .delete(`/api/admin/${kind}/${id}`)
+      .set('Origin', origin)
+      .set('X-Admin-Request', '1');
+  it('protects catalog management reads and deletions with session and origin checks', async () => {
+    for (const kind of ['products', 'categories']) {
+      expect((await request(app).get(`/api/admin/${kind}`)).status).toBe(401);
+      expect(
+        (await request(app).delete(`/api/admin/${kind}/${randomUUID()}`))
+          .status,
+      ).toBe(401);
+      const agent = await login();
+      expect(
+        (
+          await agent
+            .delete(`/api/admin/${kind}/${randomUUID()}`)
+            .set('Origin', origin)
+        ).status,
+      ).toBe(403);
+      expect(
+        (
+          await agent
+            .delete(`/api/admin/${kind}/${randomUUID()}`)
+            .set('Origin', 'https://attacker.example')
+            .set('X-Admin-Request', '1')
+        ).status,
+      ).toBe(403);
+      expect((await remove(agent, kind, 'invalid')).status).toBe(400);
+      expect((await remove(agent, kind, randomUUID())).status).toBe(404);
+    }
+  });
+  it('persists ordered galleries in public list, details and the authenticated catalog', async () => {
+    const agent = await login();
+    const gallery = ['/images/vase.svg', '/images/cup.svg', '/images/tray.svg'];
+    const created = await mutation(agent, '/api/admin/products', {
+      ...productInput(),
+      imageUrl: gallery[0],
+      imageUrls: gallery,
+    });
+    expect(created.status).toBe(201);
+    const id = created.body.data.id;
+    expect(
+      (await request(app).get(`/api/products/${id}`)).body.data.imageUrls,
+    ).toEqual(gallery);
+    expect(
+      (await request(app).get('/api/products')).body.data.products[0].imageUrls,
+    ).toEqual(gallery);
+    expect(
+      (await agent.get('/api/admin/products')).body.data.products[0].imageUrls,
+    ).toEqual(gallery);
+    expect(
+      (
+        await mutation(agent, '/api/admin/products', {
+          ...productInput(),
+          imageUrls: ['javascript:bad'],
+        })
+      ).status,
+    ).toBe(400);
+    const single = await mutation(agent, '/api/admin/products', productInput());
+    expect(single.body.data.imageUrls).toEqual(['/images/cup.svg']);
+  });
+  it('includes hidden products in management search, pagination and category counts', async () => {
+    const agent = await login();
+    await mutation(agent, '/api/admin/products', productInput());
+    await mutation(agent, '/api/admin/products', {
+      ...productInput(),
+      name: 'Прихований товар',
+      active: false,
+    });
+    const found = await agent.get(
+      '/api/admin/products?search=Прихований&limit=1',
+    );
+    expect(found.body.data).toMatchObject({ total: 1, pages: 1 });
+    expect(found.body.data.products[0].active).toBe(false);
+    expect(
+      (await agent.get('/api/admin/products?limit=1&page=2')).body.data
+        .products,
+    ).toHaveLength(1);
+    expect((await agent.get('/api/admin/products?page=0')).status).toBe(400);
+    expect(
+      (await agent.get('/api/admin/categories')).body.data[0].productCount,
+    ).toBe(2);
+  });
+  it('preserves order snapshots and replay after deleting the product and its category', async () => {
+    const agent = await login();
+    const created = await mutation(
+      agent,
+      '/api/admin/products',
+      productInput(),
+    );
+    const id = created.body.data.id;
+    const input = orderSchema.parse({
+      customer: {
+        customerName: 'Покупчиня товару',
+        phone: '+380671234567',
+        deliveryMethod: 'pickup',
+      },
+      items: [{ productId: id, quantity: 2 }],
+    });
+    const key = randomUUID();
+    const saved = await createOrder(input, key);
+    expect((await remove(agent, 'products', id)).status).toBe(200);
+    expect((await remove(agent, 'products', id)).status).toBe(404);
+    expect((await request(app).get(`/api/products/${id}`)).status).toBe(404);
+    expect((await request(app).get('/api/products')).body.data.total).toBe(0);
+    expect((await agent.get('/api/admin/stats')).body.data).toMatchObject({
+      products: 0,
+      orders: 1,
+      orderTotal: '259.98',
+    });
+    const item = await prisma.orderItem.findFirstOrThrow();
+    expect(item).toMatchObject({
+      productId: null,
+      productName: 'Новий товар',
+      quantity: 2,
+    });
+    expect(item.unitPrice.toFixed(2)).toBe('129.99');
+    const orders = (await agent.get('/api/admin/orders')).body.data.orders;
+    expect(orders[0].items[0].productName).toBe('Новий товар');
+    expect((await remove(agent, 'categories', categoryId)).status).toBe(200);
+    expect((await request(app).get('/api/categories')).body.data).toEqual([]);
+    expect((await createOrder(input, key)).order.orderNumber).toBe(
+      saved.order.orderNumber,
+    );
+    await expect(createOrder(input, randomUUID())).rejects.toMatchObject({
+      code: 'PRODUCT_UNAVAILABLE',
+    });
+    expect(await prisma.order.count()).toBe(1);
+  });
+  it('blocks deleting a nonempty category including hidden products and allows removal once empty', async () => {
+    const agent = await login();
+    const created = await mutation(agent, '/api/admin/products', {
+      ...productInput(),
+      active: false,
+    });
+    const blocked = await remove(agent, 'categories', categoryId);
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.error.code).toBe('CATEGORY_NOT_EMPTY');
+    expect(await prisma.product.count()).toBe(1);
+    expect((await remove(agent, 'products', created.body.data.id)).status).toBe(
+      200,
+    );
+    expect((await remove(agent, 'categories', categoryId)).status).toBe(200);
+    expect((await remove(agent, 'categories', categoryId)).status).toBe(404);
+    expect(
+      (await mutation(agent, '/api/admin/products', productInput())).status,
+    ).toBe(400);
+  });
+});

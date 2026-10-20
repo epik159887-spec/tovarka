@@ -14,13 +14,14 @@ import type { AdminIdentity } from '@tovarka/shared';
 import { adminApi } from './api';
 import { LoginForm } from './LoginForm';
 import { OrdersPanel } from './OrdersPanel';
+import { CatalogPanel } from './CatalogPanel';
 import { ProductForm } from './ProductForm';
 import { LoadingState, ErrorState } from '../components/ui';
 import { formatCurrency, getErrorMessage } from '../utils/format';
 import './admin.css';
 export default function AdminPage() {
   const client = useQueryClient();
-  const [tab, setTab] = useState<'orders' | 'product'>('orders');
+  const [tab, setTab] = useState<'orders' | 'product' | 'catalog'>('orders');
   const session = useQuery({
     queryKey: ['admin', 'session'],
     queryFn: adminApi.session,
@@ -173,8 +174,20 @@ export default function AdminPage() {
           >
             <PackagePlus size={18} /> Додати товар
           </button>
+          <button
+            aria-pressed={tab === 'catalog'}
+            onClick={() => setTab('catalog')}
+          >
+            <Package size={18} /> Товари й категорії
+          </button>
         </nav>
-        {tab === 'orders' ? <OrdersPanel /> : <ProductForm />}
+        {tab === 'orders' ? (
+          <OrdersPanel />
+        ) : tab === 'catalog' ? (
+          <CatalogPanel />
+        ) : (
+          <ProductForm />
+        )}
         <p className="admin-footer-note">
           Товарка · Замовлення та контакти покупців доступні лише після входу.
         </p>

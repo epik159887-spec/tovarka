@@ -94,7 +94,7 @@ Keep product changes in the seed script or authorized database operations. Catal
 
 ## Administration panel
 
-The Ukrainian admin UI is at **`/admin`** on the same frontend host as the store. It provides total order count, orders in the last 24 hours, the sum of placed orders (not paid revenue), total products, searchable/paginated orders with customer contacts and historical item snapshots, manual order deletion with confirmation, category creation, and product creation with stock, visibility, price, description, and photo upload. Hidden products are excluded from the public catalog. The current scope does not include editing/deleting products or changing order statuses.
+The Ukrainian admin UI is at **`/admin`** on the same frontend host as the store. It provides total order count, orders in the last 24 hours, the sum of placed orders (not paid revenue), total products, searchable/paginated orders with customer contacts and historical item snapshots, manual order deletion with confirmation, category creation, product creation with stock, visibility, price, description, and up to ten photos, plus searchable product/category management and confirmed deletion. Hidden products are excluded from the public catalog. The current scope does not include editing existing products or changing order statuses.
 
 After pulling an update, stop the running development server, preserve your existing `.env` (including the PostgreSQL port you selected), and run each command separately from the repository root:
 
@@ -112,27 +112,39 @@ Open `/admin` on the store's frontend, using the exact origin configured in `FRO
 
 Orders can be permanently removed using **Видалити** in the order list, followed by **Так, видалити**. Deletion removes customer contacts, item snapshots, and the notification outbox entry; dashboard counts and totals refresh automatically. Product stock is unchanged, and existing Telegram messages are not removed. An actively sending notification temporarily blocks deletion; retry after a few minutes. Only the original random request key and deletion timestamp are retained to prevent a late checkout retry from recreating the order or reducing stock again. Apply `npm run db:migrate` after updating to install the deletion-key table. Backups may still contain historical records.
 
+Use **Додати товар** to select multiple photos at once (up to 10 total, 5 MiB each). Files upload sequentially through the authenticated image endpoint; successful files stay in the form if a later upload fails. You can also append individual image links, remove images from the draft, and choose the cover using the star button. `imageUrl` remains the cover for existing carts and integrations; `imageUrls` is the ordered gallery including that cover. Legacy requests with only `imageUrl` are normalized to a one-image gallery. Existing product covers are backfilled by the new migration. Click a product photo in the storefront to open the gallery; arrows, thumbnails, and the keyboard change photos.
+
+Use **Товари й категорії** to search all products, including hidden ones, and remove products or categories after confirmation. Deleting a product removes it from both catalogs and updates the dashboard count. Existing order items keep their name/price/quantity snapshots and lose only the optional product link; old checkout retries still return the saved order, while new orders cannot purchase the deleted product. A category containing any product, including hidden products, returns `409 CATEGORY_NOT_EMPTY`; delete its products first. The database foreign key also enforces this rule during concurrent changes. Uploaded files are not automatically removed when a product is deleted because image URLs may be reused by another product. Apply `npm run db:migrate` after updating; preserve your existing `.env` and database volume.
+
 Passwords use salted scrypt hashes. Sessions use random 256-bit tokens in HttpOnly, SameSite=Strict cookies; only token digests are stored in PostgreSQL. Sessions expire after eight hours and are revoked on logout/password reset. Production cookies are Secure and require HTTPS. Login attempts are rate limited. Every admin mutation requires the configured browser Origin plus a custom request header, and every customer-data endpoint requires a valid server session. Private responses use `Cache-Control: no-store`; the browser clears private query data on logout/expiry. The UI does not store passwords or session tokens in localStorage.
 
-Product photo uploads accept a single PNG, JPEG, or WebP up to 5 MiB, check the file signature, generate a random filename, and exclude SVG/HTML uploads. Uploaded photos are public product assets under `/uploads`; only administrators may upload them. Use photographs intended to be public. The default filesystem directory is `.data/uploads` relative to the backend process working directory (normally `apps/backend/.data/uploads`). It is ignored by Git. Set `UPLOAD_DIR` to an absolute persistent directory for production and back it up along with the database. File uploads are separate from database transactions: a photo uploaded before a discarded form can remain unused on disk. Existing catalog images and HTTPS image URLs remain supported, including in persisted carts.
+Each product photo upload request accepts one PNG, JPEG, or WebP up to 5 MiB. The backend checks the file signature, generates a random filename, and excludes SVG/HTML uploads. Uploaded photos are public product assets under `/uploads`; only administrators may upload them. Use photographs intended to be public. The default filesystem directory is `.data/uploads` relative to the backend process working directory (normally `apps/backend/.data/uploads`). It is ignored by Git. Set `UPLOAD_DIR` to an absolute persistent directory for production and back it up along with the database. File uploads are separate from database transactions: a photo uploaded before a discarded form can remain unused on disk. Existing catalog images and HTTPS image URLs remain supported, including in persisted carts.
 
 Admin API routes (all under `/api/admin`):
 
-| Method | Path          | Purpose                                                       |
-| ------ | ------------- | ------------------------------------------------------------- |
-| POST   | `/login`      | Validate credentials and set the session cookie               |
-| GET    | `/session`    | Current administrator identity                                |
-| DELETE | `/orders/:id` | Permanently remove an order (authenticated, same-origin)      |
-| POST   | `/logout`     | Revoke the current session                                    |
-| GET    | `/stats`      | Store order/product counts and order amount                   |
-| GET    | `/orders`     | Paginated orders; `search` matches number, customer, or phone |
-| POST   | `/products`   | Create a validated catalog product                            |
-| POST   | `/categories` | Create a product category                                     |
-| POST   | `/uploads`    | Upload a product photo as multipart field `image`             |
+| Method | Path              | Purpose                                                       |
+| ------ | ----------------- | ------------------------------------------------------------- |
+| POST   | `/login`          | Validate credentials and set the session cookie               |
+| GET    | `/session`        | Current administrator identity                                |
+| DELETE | `/orders/:id`     | Permanently remove an order (authenticated, same-origin)      |
+| POST   | `/logout`         | Revoke the current session                                    |
+| GET    | `/stats`          | Store order/product counts and order amount                   |
+| GET    | `/orders`         | Paginated orders; `search` matches number, customer, or phone |
+| GET    | `/products`       | Search/paginate all products, including hidden ones           |
+| DELETE | `/products/:id`   | Remove a product while preserving order snapshots             |
+| GET    | `/categories`     | List categories with product counts                           |
+| DELETE | `/categories/:id` | Remove an empty category; 409 if it has products              |
+| POST   | `/products`       | Create a validated catalog product                            |
+| POST   | `/categories`     | Create a product category                                     |
+| POST   | `/uploads`        | Upload a product photo as multipart field `image`             |
 
 The optional admin browser scenario requires a disposable seeded database, a dedicated admin account, a test order, and process variables `ADMIN_TEST_USERNAME`, `ADMIN_TEST_PASSWORD`, `ADMIN_TEST_CUSTOMER`, and `ADMIN_TEST_PRODUCT`. Never provide production credentials to browser tests. Run `npm run test:browser -- tests/browser/admin.spec.ts` with those variables injected securely. Without the two credential variables, this optional scenario is explicitly skipped; the three storefront scenarios still run normally. The scenario places a product in the database and uploads a photo, so use disposable fixtures and clean them up after testing.
 
 The optional destructive deletion scenario additionally requires `ADMIN_DELETE_TEST_ORDER`, the full order number of a disposable fixture, and the same test administrator credentials. Run `npm run test:browser -- tests/browser/admin-delete.spec.ts` against an isolated backend with Telegram disabled. It cancels once, confirms deletion on mobile, checks refreshed totals and persistence, and permanently removes the fixture order. The fixture must be the only order in that database.
+
+The optional `tests/browser/admin-catalog.spec.ts` scenario requires the test administrator credentials above and `ADMIN_CATALOG_TEST_ENABLED=1`. Use a disposable seeded backend with both Telegram variables explicitly empty. It creates/uploads a two-photo product, changes the cover, removes/re-adds a draft image, navigates the mobile gallery, creates a test order, confirms product/category deletions, and verifies the preserved order history. It deletes the product/category fixture but retains the test order and uploaded image files in the disposable environment.
+
+Validation for gallery and catalog deletion: 55 unit tests, 32 PostgreSQL integration tests, and 5 Chromium browser scenarios passed. Linting, type checking, and the production build passed. Telegram was disabled or mocked throughout verification.
 
 ## Telegram configuration
 

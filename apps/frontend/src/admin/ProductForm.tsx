@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Upload, ImagePlus, Plus, Check, LoaderCircle } from 'lucide-react';
+import { Plus, Check, LoaderCircle } from 'lucide-react';
 import {
   createProductSchema,
   createCategorySchema,
-  productImageSchema,
   type CreateProductForm,
   type CreateProductInput,
 } from '@tovarka/shared';
+import { ProductPhotos } from './ProductPhotos';
 import { adminApi } from './api';
 import { productApi } from '../services/api';
 import { Button, Input, ErrorState } from '../components/ui';
@@ -19,6 +19,7 @@ export function ProductForm() {
   const [categoryName, setCategoryName] = useState('');
   const [categoryError, setCategoryError] = useState('');
   const [notice, setNotice] = useState('');
+  const [photoBusy, setPhotoBusy] = useState(false);
   const form = useForm<CreateProductForm, unknown, CreateProductInput>({
     resolver: zodResolver(createProductSchema),
     defaultValues: {
@@ -28,18 +29,16 @@ export function ProductForm() {
       stock: 0,
       categoryId: '',
       imageUrl: '',
+      imageUrls: [],
       active: true,
     },
   });
-  const imageUrl = useWatch({ control: form.control, name: 'imageUrl' });
+  const categoryId = useWatch({ control: form.control, name: 'categoryId' });
+  const imageUrls =
+    useWatch({ control: form.control, name: 'imageUrls' }) ?? [];
   const categories = useQuery({
     queryKey: ['categories'],
     queryFn: productApi.categories,
-  });
-  const upload = useMutation({
-    mutationFn: adminApi.upload,
-    onSuccess: (result) =>
-      form.setValue('imageUrl', result.imageUrl, { shouldValidate: true }),
   });
   const create = useMutation({
     mutationFn: adminApi.createProduct,
@@ -48,9 +47,10 @@ export function ProductForm() {
         `Товар «${product.name}» додано${product.active ? ' до каталогу' : ' як прихований'}.`,
       );
       form.reset();
-      upload.reset();
       void client.invalidateQueries({ queryKey: ['products'] });
       void client.invalidateQueries({ queryKey: ['admin', 'stats'] });
+      void client.invalidateQueries({ queryKey: ['admin', 'products'] });
+      void client.invalidateQueries({ queryKey: ['admin', 'categories'] });
     },
   });
   const category = useMutation({
@@ -59,6 +59,7 @@ export function ProductForm() {
       setCategoryName('');
       setCategoryError('');
       void client.invalidateQueries({ queryKey: ['categories'] });
+      void client.invalidateQueries({ queryKey: ['admin', 'categories'] });
       form.setValue('categoryId', result.id, { shouldValidate: true });
     },
   });
@@ -71,7 +72,7 @@ export function ProductForm() {
     category.mutate(result.data.name);
   };
   const errors = form.formState.errors;
-  const busy = create.isPending || upload.isPending || category.isPending;
+  const busy = create.isPending || photoBusy || category.isPending;
   return (
     <section className="admin-card admin-product-card">
       <div className="admin-section-heading">
@@ -152,6 +153,7 @@ export function ProductForm() {
                 <select
                   id="admin-category"
                   {...form.register('categoryId')}
+                  value={categoryId ?? ''}
                   aria-invalid={!!errors.categoryId}
                 >
                   <option value="">
@@ -205,52 +207,18 @@ export function ProductForm() {
                 Показувати товар у магазині
               </label>
             </div>
-            <div className="admin-photo-column">
-              <label htmlFor="admin-photo" className="admin-photo-upload">
-                {imageUrl && productImageSchema.safeParse(imageUrl).success ? (
-                  <img src={imageUrl} alt="Попередній перегляд фото товару" />
-                ) : (
-                  <>
-                    <ImagePlus size={36} strokeWidth={1.2} />
-                    <strong>Фото товару</strong>
-                    <span>PNG, JPEG або WebP · до 5 МБ</span>
-                  </>
-                )}
-                <span className="admin-upload-action">
-                  <Upload size={16} />
-                  {upload.isPending
-                    ? 'Завантажуємо…'
-                    : 'Обрати фото з комп’ютера'}
-                </span>
-              </label>
-              <input
-                className="admin-file-input"
-                id="admin-photo"
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                disabled={busy}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) upload.mutate(file);
-                  event.target.value = '';
-                }}
-              />
-              {upload.isError && (
-                <p className="form-error" role="alert">
-                  {getErrorMessage(upload.error)}
-                </p>
-              )}
-              <Input
-                label="Або посилання на зображення"
-                placeholder="https://…"
-                {...form.register('imageUrl')}
-                error={errors.imageUrl?.message}
-              />
-              <p className="muted">
-                Фото з’явиться в картці товару. Для зовнішніх зображень
-                використовуйте пряме HTTPS-посилання.
-              </p>
-            </div>
+            <ProductPhotos
+              value={imageUrls}
+              onChange={(photos) => {
+                form.setValue('imageUrls', photos, { shouldValidate: true });
+                form.setValue('imageUrl', photos[0] ?? '', {
+                  shouldValidate: true,
+                });
+              }}
+              onBusyChange={setPhotoBusy}
+              disabled={busy}
+              error={errors.imageUrls?.message ?? errors.imageUrl?.message}
+            />
           </div>
         </fieldset>
         {create.isError && (
