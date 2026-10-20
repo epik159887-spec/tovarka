@@ -77,6 +77,8 @@ npm run db:migrate
 npm run db:generate
 ```
 
+Migration failures report a safe `stage`, `code`, and troubleshooting hint instead of the raw database error. `28P01` means the database rejected the password; `ECONNREFUSED` means no database is accepting the connection; `3D000` means the selected database does not exist. Check `docker compose ps` and verify your local root `.env` against the credentials used to initialize PostgreSQL. On Windows, a separately installed PostgreSQL service may already use port 5432. Do not share `.env` or a connection URL when requesting help; share only the diagnostic code and stage. Existing Docker volumes keep their original database password when `.env` changes.
+
 Keep product changes in the seed script or authorized database operations. There is intentionally no public catalog-write endpoint or administration dashboard.
 
 ## Telegram configuration
@@ -158,7 +160,7 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-Validation during implementation: 21 unit tests, 12 PostgreSQL integration tests, and 3 Chromium browser scenarios passed. Type checking, linting, and the production build passed. No real Telegram message was sent; actual delivery requires the two Telegram variables and permitted network access.
+Validation during implementation: 27 unit tests, 12 PostgreSQL integration tests, and 3 Chromium browser scenarios passed. Type checking, linting, and the production build passed. No real Telegram message was sent; actual delivery requires the two Telegram variables and permitted network access.
 
 ## Production build and deployment
 
