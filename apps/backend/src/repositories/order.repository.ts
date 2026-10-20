@@ -5,11 +5,35 @@ import type { OrderInput } from '@tovarka/shared';
 import { AppError } from '../utils/errors.js';
 const include = { notification: true } as const;
 export const orderRepository = {
-  find: (key: string) =>
-    prisma.order.findUnique({ where: { idempotencyKey: key }, include }),
+  async find(key: string) {
+    const order = await prisma.order.findUnique({
+      where: { idempotencyKey: key },
+      include,
+    });
+    if (!order) await this.assertNotDeleted(key);
+    return order;
+  },
+  async assertNotDeleted(
+    key: string,
+    client: Pick<typeof prisma, 'orderRequestKey'> = prisma,
+  ) {
+    if (
+      await client.orderRequestKey.findUnique({
+        where: { idempotencyKey: key, deletedAt: { not: null } },
+      })
+    )
+      throw new AppError(
+        409,
+        'ORDER_DELETED',
+        'Це замовлення видалено адміністратором. Для нового замовлення оновіть кошик.',
+      );
+  },
   async create(input: OrderInput, key: string, requestHash: string) {
     return prisma.$transaction(
       async (tx) => {
+        await this.assertNotDeleted(key, tx);
+        // The permanent unique reservation also blocks retries racing with deletion.
+        await tx.orderRequestKey.create({ data: { idempotencyKey: key } });
         const products = await tx.product.findMany({
           where: {
             id: { in: input.items.map((i) => i.productId) },

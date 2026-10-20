@@ -44,6 +44,11 @@ export const adminApi = {
     adminRequest<AdminOrderPage>(
       `/orders?${new URLSearchParams({ page: String(page), search, limit: '10' })}`,
     ),
+  deleteOrder: (id: string) =>
+    adminRequest<{ id: string }>(`/orders/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { 'X-Admin-Request': '1' },
+    }),
   createProduct: (input: CreateProductInput) =>
     post<AdminProduct>('/products', input),
   createCategory: (name: string) => post<Category>('/categories', { name }),

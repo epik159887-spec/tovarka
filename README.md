@@ -94,7 +94,7 @@ Keep product changes in the seed script or authorized database operations. Catal
 
 ## Administration panel
 
-The Ukrainian admin UI is at **`/admin`** on the same frontend host as the store. It provides total order count, orders in the last 24 hours, the sum of placed orders (not paid revenue), total products, searchable/paginated orders with customer contacts and historical item snapshots, category creation, and product creation with stock, visibility, price, description, and photo upload. Hidden products are excluded from the public catalog. The current scope does not include editing/deleting products or changing order statuses.
+The Ukrainian admin UI is at **`/admin`** on the same frontend host as the store. It provides total order count, orders in the last 24 hours, the sum of placed orders (not paid revenue), total products, searchable/paginated orders with customer contacts and historical item snapshots, manual order deletion with confirmation, category creation, and product creation with stock, visibility, price, description, and photo upload. Hidden products are excluded from the public catalog. The current scope does not include editing/deleting products or changing order statuses.
 
 After pulling an update, stop the running development server, preserve your existing `.env` (including the PostgreSQL port you selected), and run each command separately from the repository root:
 
@@ -110,6 +110,8 @@ PostgreSQL must be running before migration and account creation. `admin:create`
 
 Open `/admin` on the store's frontend, using the exact origin configured in `FRONTEND_URL`; the default is the frontend on `localhost` port `5173`. Signing in through a different hostname such as `127.0.0.1` requires updating `FRONTEND_URL` and restarting the backend. Keep your working `DATABASE_URL` unchanged when adding an administrator. Account data is stored in the same PostgreSQL database as orders.
 
+Orders can be permanently removed using **Видалити** in the order list, followed by **Так, видалити**. Deletion removes customer contacts, item snapshots, and the notification outbox entry; dashboard counts and totals refresh automatically. Product stock is unchanged, and existing Telegram messages are not removed. An actively sending notification temporarily blocks deletion; retry after a few minutes. Only the original random request key and deletion timestamp are retained to prevent a late checkout retry from recreating the order or reducing stock again. Apply `npm run db:migrate` after updating to install the deletion-key table. Backups may still contain historical records.
+
 Passwords use salted scrypt hashes. Sessions use random 256-bit tokens in HttpOnly, SameSite=Strict cookies; only token digests are stored in PostgreSQL. Sessions expire after eight hours and are revoked on logout/password reset. Production cookies are Secure and require HTTPS. Login attempts are rate limited. Every admin mutation requires the configured browser Origin plus a custom request header, and every customer-data endpoint requires a valid server session. Private responses use `Cache-Control: no-store`; the browser clears private query data on logout/expiry. The UI does not store passwords or session tokens in localStorage.
 
 Product photo uploads accept a single PNG, JPEG, or WebP up to 5 MiB, check the file signature, generate a random filename, and exclude SVG/HTML uploads. Uploaded photos are public product assets under `/uploads`; only administrators may upload them. Use photographs intended to be public. The default filesystem directory is `.data/uploads` relative to the backend process working directory (normally `apps/backend/.data/uploads`). It is ignored by Git. Set `UPLOAD_DIR` to an absolute persistent directory for production and back it up along with the database. File uploads are separate from database transactions: a photo uploaded before a discarded form can remain unused on disk. Existing catalog images and HTTPS image URLs remain supported, including in persisted carts.
@@ -120,6 +122,7 @@ Admin API routes (all under `/api/admin`):
 | ------ | ------------- | ------------------------------------------------------------- |
 | POST   | `/login`      | Validate credentials and set the session cookie               |
 | GET    | `/session`    | Current administrator identity                                |
+| DELETE | `/orders/:id` | Permanently remove an order (authenticated, same-origin)      |
 | POST   | `/logout`     | Revoke the current session                                    |
 | GET    | `/stats`      | Store order/product counts and order amount                   |
 | GET    | `/orders`     | Paginated orders; `search` matches number, customer, or phone |
@@ -128,6 +131,8 @@ Admin API routes (all under `/api/admin`):
 | POST   | `/uploads`    | Upload a product photo as multipart field `image`             |
 
 The optional admin browser scenario requires a disposable seeded database, a dedicated admin account, a test order, and process variables `ADMIN_TEST_USERNAME`, `ADMIN_TEST_PASSWORD`, `ADMIN_TEST_CUSTOMER`, and `ADMIN_TEST_PRODUCT`. Never provide production credentials to browser tests. Run `npm run test:browser -- tests/browser/admin.spec.ts` with those variables injected securely. Without the two credential variables, this optional scenario is explicitly skipped; the three storefront scenarios still run normally. The scenario places a product in the database and uploads a photo, so use disposable fixtures and clean them up after testing.
+
+The optional destructive deletion scenario additionally requires `ADMIN_DELETE_TEST_ORDER`, the full order number of a disposable fixture, and the same test administrator credentials. Run `npm run test:browser -- tests/browser/admin-delete.spec.ts` against an isolated backend with Telegram disabled. It cancels once, confirms deletion on mobile, checks refreshed totals and persistence, and permanently removes the fixture order. The fixture must be the only order in that database.
 
 ## Telegram configuration
 

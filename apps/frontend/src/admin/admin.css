@@ -641,3 +641,39 @@
     padding: 20px;
   }
 }
+
+.admin-order-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.admin-delete-button {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid #d9bdb4;
+  background: transparent;
+  color: #963c2b;
+  padding: 10px 12px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.admin-delete-button:hover {
+  background: #faeee9;
+}
+.button.button-danger {
+  background: #963c2b;
+  color: white;
+}
+.button.button-danger:hover {
+  background: #7a3022;
+}
+.admin-delete-confirm {
+  padding: 24px;
+  display: grid;
+  gap: 20px;
+}
+.admin-delete-confirm .admin-order-actions {
+  justify-content: flex-end;
+}

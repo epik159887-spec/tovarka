@@ -12,7 +12,7 @@ app.use(helmet());
 app.use(
   cors({
     origin: env.FRONTEND_URL,
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Idempotency-Key', 'X-Admin-Request'],
   }),
 );

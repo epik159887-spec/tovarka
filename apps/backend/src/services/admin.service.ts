@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { adminRepository } from '../repositories/admin.repository.js';
 import {
@@ -37,4 +38,26 @@ export async function setAdminPassword(username: string, password: string) {
     .parse(username);
   z.string().min(12).max(128).parse(password);
   await adminRepository.setPassword(username, await hashPassword(password));
+}
+
+export async function deleteAdminOrder(id: string) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return await adminRepository.deleteOrder(id);
+    } catch (error) {
+      if (
+        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+        error.code !== 'P2034'
+      )
+        throw error;
+      if (attempt === 3)
+        throw new AppError(
+          503,
+          'ORDER_BUSY',
+          'Сервіс зайнятий. Спробуйте видалити замовлення ще раз.',
+        );
+      await new Promise((resolve) => setTimeout(resolve, 20 * (attempt + 1)));
+    }
+  }
+  throw new Error('Unreachable deletion retry state');
 }

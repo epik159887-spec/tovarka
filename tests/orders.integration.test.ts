@@ -42,6 +42,7 @@ beforeEach(async () => {
   await prisma.notification.deleteMany();
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
+  await prisma.orderRequestKey.deleteMany();
   await prisma.product.deleteMany();
   await prisma.category.deleteMany();
   const category = await prisma.category.create({

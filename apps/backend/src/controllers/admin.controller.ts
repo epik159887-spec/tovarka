@@ -1,12 +1,17 @@
 import type { Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import {
+  z,
   adminLoginSchema,
   adminOrderQuerySchema,
   createProductSchema,
   createCategorySchema,
 } from '@tovarka/shared';
-import { loginAdmin, createAdminProduct } from '../services/admin.service.js';
+import {
+  loginAdmin,
+  createAdminProduct,
+  deleteAdminOrder,
+} from '../services/admin.service.js';
 import { adminRepository } from '../repositories/admin.repository.js';
 import {
   adminCookieName,
@@ -45,23 +50,24 @@ export const adminController = {
       ),
     });
   },
+  async deleteOrder(req: Request, res: Response) {
+    res.json({
+      data: await deleteAdminOrder(z.string().uuid().parse(req.params.id)),
+    });
+  },
   async createProduct(req: Request, res: Response) {
-    res
-      .status(201)
-      .json({
-        data: await createAdminProduct(createProductSchema.parse(req.body)),
-      });
+    res.status(201).json({
+      data: await createAdminProduct(createProductSchema.parse(req.body)),
+    });
   },
   async createCategory(req: Request, res: Response) {
     const input = createCategorySchema.parse(req.body);
-    res
-      .status(201)
-      .json({
-        data: await adminRepository.createCategory(
-          input.name,
-          `category-${randomUUID()}`,
-        ),
-      });
+    res.status(201).json({
+      data: await adminRepository.createCategory(
+        input.name,
+        `category-${randomUUID()}`,
+      ),
+    });
   },
   async upload(req: Request, res: Response) {
     res.status(201).json({ data: await saveProductImage(req.file) });

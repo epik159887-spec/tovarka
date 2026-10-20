@@ -89,3 +89,9 @@ model AdminSession {
   @@index([expiresAt])
   @@index([adminId])
 }
+
+// Reserve every request key permanently so deletion cannot allow duplicate checkout.
+model OrderRequestKey {
+  idempotencyKey String @id @db.Uuid
+  deletedAt DateTime?
+}

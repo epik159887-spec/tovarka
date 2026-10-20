@@ -56,6 +56,7 @@ beforeEach(async () => {
   await prisma.notification.deleteMany();
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
+  await prisma.orderRequestKey.deleteMany();
   await prisma.product.deleteMany();
   await prisma.category.deleteMany();
   categoryId = (
@@ -274,5 +275,140 @@ describe('admin catalog and order reporting', () => {
       .set('X-Admin-Request', '1')
       .attach('image', Buffer.alloc(5 * 1024 * 1024 + 1), 'large.png');
     expect(large.status).toBe(413);
+  });
+});
+
+describe('manual order deletion', () => {
+  async function fixture() {
+    const product = await prisma.product.create({
+      data: { ...productInput(), slug: randomUUID() },
+    });
+    const input = orderSchema.parse({
+      customer: {
+        customerName: 'Тест видалення',
+        phone: '+380671234567',
+        deliveryMethod: 'pickup',
+      },
+      items: [{ productId: product.id, quantity: 2 }],
+    });
+    const key = randomUUID();
+    const result = await createOrder(input, key);
+    const order = await prisma.order.findUniqueOrThrow({
+      where: { orderNumber: result.order.orderNumber },
+    });
+    return { product, input, key, order };
+  }
+  const remove = (agent: ReturnType<typeof request.agent>, id: string) =>
+    agent
+      .delete(`/api/admin/orders/${id}`)
+      .set('Origin', origin)
+      .set('X-Admin-Request', '1');
+  it('requires authentication, same-origin protection and a valid order ID', async () => {
+    const { order } = await fixture();
+    expect(
+      (await request(app).delete(`/api/admin/orders/${order.id}`)).status,
+    ).toBe(401);
+    const agent = await login();
+    expect(
+      (
+        await agent
+          .delete(`/api/admin/orders/${order.id}`)
+          .set('Origin', origin)
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await agent
+          .delete(`/api/admin/orders/${order.id}`)
+          .set('Origin', 'https://attacker.example')
+          .set('X-Admin-Request', '1')
+      ).status,
+    ).toBe(403);
+    expect((await remove(agent, 'invalid')).status).toBe(400);
+    expect((await remove(agent, randomUUID())).status).toBe(404);
+    expect(await prisma.order.count()).toBe(1);
+  });
+  it('removes contacts, items and pending notification, updates totals, and preserves stock and retry safety', async () => {
+    const { order, product, input, key } = await fixture();
+    const agent = await login();
+    expect((await remove(agent, order.id)).status).toBe(200);
+    expect(await prisma.order.count()).toBe(0);
+    expect(await prisma.orderItem.count()).toBe(0);
+    expect(await prisma.notification.count()).toBe(0);
+    expect(
+      (await prisma.product.findUniqueOrThrow({ where: { id: product.id } }))
+        .stock,
+    ).toBe(6);
+    expect((await agent.get('/api/admin/stats')).body.data).toMatchObject({
+      orders: 0,
+      recentOrders: 0,
+      orderTotal: '0.00',
+    });
+    expect((await agent.get('/api/admin/orders')).body.data.total).toBe(0);
+    expect((await remove(agent, order.id)).status).toBe(404);
+    await expect(createOrder(input, key)).rejects.toMatchObject({
+      code: 'ORDER_DELETED',
+    });
+    const { orderRepository } =
+      await import('../apps/backend/src/repositories/order.repository.js');
+    await expect(
+      orderRepository.create(input, key, 'test'),
+    ).rejects.toMatchObject({ code: 'ORDER_DELETED' });
+    expect(await prisma.order.count()).toBe(0);
+    const { notificationRepository } =
+      await import('../apps/backend/src/repositories/notification.repository.js');
+    expect(await notificationRepository.claim()).toBeNull();
+  });
+  it('waits for an active notification and allows deleting a delivered order', async () => {
+    const { order } = await fixture();
+    const agent = await login();
+    await prisma.notification.update({
+      where: { orderId: order.id },
+      data: { status: 'PROCESSING', lockedAt: new Date() },
+    });
+    expect((await remove(agent, order.id)).status).toBe(409);
+    expect(
+      await prisma.orderRequestKey.count({
+        where: { deletedAt: { not: null } },
+      }),
+    ).toBe(0);
+    expect(await prisma.order.count()).toBe(1);
+    await prisma.notification.update({
+      where: { orderId: order.id },
+      data: { status: 'SENT' },
+    });
+    expect((await remove(agent, order.id)).status).toBe(200);
+  });
+  it('cannot recreate an order when checkout replay races with deletion', async () => {
+    const { order, product, input, key } = await fixture();
+    const agent = await login();
+    const [removed] = await Promise.allSettled([
+      remove(agent, order.id),
+      createOrder(input, key),
+    ]);
+    expect(removed.status).toBe('fulfilled');
+    if (removed.status === 'fulfilled') expect(removed.value.status).toBe(200);
+    expect(await prisma.order.count()).toBe(0);
+    await expect(createOrder(input, key)).rejects.toMatchObject({
+      code: 'ORDER_DELETED',
+    });
+    expect(
+      (await prisma.product.findUniqueOrThrow({ where: { id: product.id } }))
+        .stock,
+    ).toBe(6);
+  });
+  it('handles simultaneous deletion attempts without restoring stock', async () => {
+    const { order, product } = await fixture();
+    const agent = await login();
+    const responses = await Promise.all([
+      remove(agent, order.id),
+      remove(agent, order.id),
+    ]);
+    expect(responses.map((r) => r.status).sort()).toEqual([200, 404]);
+    expect(await prisma.orderRequestKey.count()).toBe(1);
+    expect(
+      (await prisma.product.findUniqueOrThrow({ where: { id: product.id } }))
+        .stock,
+    ).toBe(6);
   });
 });

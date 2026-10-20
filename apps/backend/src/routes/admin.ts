@@ -31,6 +31,7 @@ adminApi.get('/session', adminController.session);
 adminApi.get('/stats', adminController.stats);
 adminApi.get('/orders', adminController.orders);
 adminApi.use(requireAdminOrigin);
+adminApi.delete('/orders/:id', adminController.deleteOrder);
 adminApi.post('/logout', adminController.logout);
 adminApi.post('/products', adminController.createProduct);
 adminApi.post('/categories', adminController.createCategory);

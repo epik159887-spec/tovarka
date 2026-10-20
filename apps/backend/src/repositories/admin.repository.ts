@@ -1,3 +1,4 @@
+import { AppError } from '../utils/errors.js';
 import { prisma } from '../config/database.js';
 import { Prisma } from '@prisma/client';
 import type { AdminOrderQuery, CreateProductInput } from '@tovarka/shared';
@@ -99,6 +100,40 @@ export const adminRepository = {
       page: query.page,
       pages: Math.ceil(total / query.limit),
     };
+  },
+  async deleteOrder(id: string) {
+    return prisma.$transaction(
+      async (tx) => {
+        const order = await tx.order.findUnique({ where: { id } });
+        if (!order)
+          throw new AppError(
+            404,
+            'ORDER_NOT_FOUND',
+            'Замовлення вже видалено або не знайдено.',
+          );
+        // Compete with the worker's conditional claim before removing the outbox.
+        const notification = await tx.notification.updateMany({
+          where: { orderId: id, status: { not: 'PROCESSING' } },
+          data: { status: 'CANCELLED' },
+        });
+        if (
+          !notification.count &&
+          (await tx.notification.count({ where: { orderId: id } }))
+        )
+          throw new AppError(
+            409,
+            'ORDER_NOTIFICATION_BUSY',
+            'Зараз надсилається сповіщення про замовлення. Спробуйте видалити його за кілька хвилин.',
+          );
+        await tx.orderRequestKey.update({
+          where: { idempotencyKey: order.idempotencyKey },
+          data: { deletedAt: new Date() },
+        });
+        await tx.order.delete({ where: { id } });
+        return { id };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   },
   category: (id: string) => prisma.category.findUnique({ where: { id } }),
   createProduct: (input: CreateProductInput, slug: string) =>
