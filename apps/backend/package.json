@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "npm run db:generate",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/apps/backend/src/server.js",
     "build": "tsc -p tsconfig.build.json",
