@@ -1,0 +1,44 @@
+{
+  "name": "tovarka",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:backend": "npm run dev -w @tovarka/backend",
+    "dev:frontend": "npm run dev -w @tovarka/frontend",
+    "build": "npm run build -w @tovarka/shared && npm run build -w @tovarka/backend && npm run build -w @tovarka/frontend",
+    "typecheck": "tsc --noEmit -p apps/backend && tsc --noEmit -p apps/frontend",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "db:generate": "npm run db:generate -w @tovarka/backend",
+    "db:migrate": "npm run db:migrate -w @tovarka/backend",
+    "db:seed": "npm run db:seed -w @tovarka/backend",
+    "prepare": "npm run build -w @tovarka/shared",
+    "test:browser": "playwright test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^24.0.0",
+    "@types/supertest": "^6.0.3",
+    "concurrently": "^9.2.1",
+    "eslint": "^9.39.0",
+    "eslint-plugin-react-hooks": "^7.0.0",
+    "globals": "^16.5.0",
+    "prettier": "^3.6.2",
+    "supertest": "^7.1.4",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.0",
+    "vitest": "^3.2.4"
+  }
+}

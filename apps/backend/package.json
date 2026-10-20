@@ -1,0 +1,33 @@
+{
+  "name": "@tovarka/backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/apps/backend/src/server.js",
+    "build": "tsc -p tsconfig.build.json",
+    "db:generate": "prisma generate",
+    "db:migrate": "tsx src/utils/migrate.ts",
+    "db:seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "@tovarka/shared": "*",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
+    "zod": "^3.25.76",
+    "@prisma/adapter-pg": "6.19.3",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "prisma": "6.19.3",
+    "tsx": "^4.20.6",
+    "@types/pg": "^8.15.5"
+  }
+}
